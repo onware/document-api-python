@@ -7,13 +7,26 @@ import getpass
 import logging
 import zipfile
 import tableauserverclient as TSC
+import os
 from tableauserverclient import ConnectionCredentials, ConnectionItem
 from tableaudocumentapi import Workbook
+
 
 ############################################################
 # Step 3) Use a database list (in CSV), loop thru and
 #          create new .twb's with their settings
 ############################################################
+
+//https://stackoverflow.com/questions/19932130/iterate-through-folders-then-subfolders-and-print-filenames-with-path-to-text-f
+def list_files(dir):                                                                                                  
+    r = []                                                                                                            
+    subdirs = [x[0] for x in os.walk(dir)]                                                                            
+    for subdir in subdirs:                                                                                            
+        files = os.walk(subdir).next()[2]                                                                             
+        if (len(files) > 0):                                                                                          
+            for file in files:                                                                                        
+                r.append(subdir + "/" + file)                                                                         
+    return r   
 
 def main():
 
@@ -27,8 +40,9 @@ def main():
     
     args = parser.parse_args()
     
-    password = getpass.getpass("Password: ")
-    
+    password = getpass.getpass("Password: ") 
+
+
     # Set logging level based on user input, or error by default
     logging_level = getattr(logging, args.logging_level.upper())
     logging.basicConfig(level=logging_level)
@@ -44,49 +58,57 @@ def main():
             databases = csv.DictReader(csvfile, delimiter=',', quotechar='"')
             for row in databases:   		
                 # Open the workbook
-                    sourceWB = Workbook(row['Workbook'] + row['Format'])
-        
-                # Update the filters
-                    for datasource in reversed(sourceWB.datasources):
-                        for children in datasource._datasourceTree._root._children:
-                            if "column" in children.attrib and "class" in children.attrib:
-                                if children.attrib["column"] == "[Branch]" and children.attrib["class"] == "categorical":
-                                    for subchildren in children._children:
-                                        if "member" in subchildren.attrib:
-                                            subchildren.attrib["member"] = '&quot;' + row['Branch'] + '&quot;'
-                            
-                # Save our newly created workbook with the new file name
-                    sourceWB.save_as(row['Workbook'] + ' - ' + row['Branch'] + row['Format']) 
+                   
+                   dir_name = "Zip"
+                   originaltableauworkbook = zipfile.ZipFile(row['Workbook'] + ".twbx")                  
+                   originaltableauworkbook.extractall(dir_name)
+                   test = os.listdir(dir_name)
 
-                    z = zipfile.ZipFile(row['Workbook'] + ' - ' + row['Branch'] + row['Format'] +".twbx",mode='w')
-                    z.write(row['Workbook'] + row['Format'])
-                    #z.write("ClayburnServices_HZLogo.jpg","Image\\ClayburnServices_HZLogo.jpg")
-                    #z.write("Thorpe_Logo2015.jpg","Image\\Thorpe_Logo2015.jpg")
-                    z.close()
+                   for item in test:
+                       if item.endswith(".twb"):
+                           sourceWB = Workbook(os.path.join(dir_name, item))
 
-                    all_projects, pagination_item = server.projects.get()
-                    default_project = next((project for project in all_projects if project.name == row['Project']), None)
+                        # Update the filters
+                           for datasource in reversed(sourceWB.datasources):
+                               for children in datasource._datasourceTree._root._children:
+                                   if "column" in children.attrib and "class" in children.attrib:
+                                       if children.attrib["column"] == "[Branch]" and children.attrib["class"] == "categorical":
+                                           for subchildren in children._children:
+                                               if "member" in subchildren.attrib:
+                                                   subchildren.attrib["member"] = '&quot;' + row['Branch'] + '&quot;'
+                                    
+                        # Save our newly created workbook with the new file name
+                           sourceWB.save_as(row['Workbook'] + ' - ' + row['Branch'] + row['Format']) 
+                           z = zipfile.ZipFile(row['Workbook'] + ' - ' + row['Branch']+ ".twbx",mode='w')
+                           z.write(row['Workbook'] + ' - ' + row['Branch'] + row['Format'])
+                           for item in list_files(dir_name):
+                               if item.endswith(".twb") != True:
+                                   z.write(item,item.replace("Zip",""))
+                           z.close()
 
-
-                    connection2 = ConnectionItem()
-                    connection2.server_address = "10ay.online.tableau.com"
-                    connection2.server_port = "443"
-                    connection2.connection_credentials = ConnectionCredentials(args.username, password, True)
-
-                    all_connections = list()
-                    all_connections.append(connection2)
-
-                    if default_project is not None:
-                        new_workbook = TSC.WorkbookItem(default_project.id)
-                        if args.as_job:
-                            new_job = server.workbooks.publish(new_workbook,row['Workbook'] +".twbx", overwrite_true)
-                            print("Workbook published. JOB ID: {0}".format(new_job.id))
-                        else:
-                            new_workbook = server.workbooks.publish(new_workbook, row['Workbook'] +".twbx", overwrite_true)
-                            print("Workbook published. ID: {0}".format(new_workbook.id))
-                    else:
-                        error = "The default project could not be found."
-                        raise LookupError(error)
+                       all_projects, pagination_item = server.projects.get()
+                       default_project = next((project for project in all_projects if project.name == row['Project']), None)
+                  
+                  
+                       connection = ConnectionItem()
+                       connection.server_address = "10ay.online.tableau.com"
+                       connection.server_port = "443"
+                       connection.connection_credentials = ConnectionCredentials(args.username, password, True)
+                       
+                       all_connections = list()
+                       all_connections.append(connection)
+                       
+                       if default_project is not None:
+                           new_workbook = TSC.WorkbookItem(default_project.id)
+                           if args.as_job:
+                               new_job = server.workbooks.publish(new_workbook,row['Workbook'] +".twbx", overwrite_true)
+                               print("Workbook published. JOB ID: {0}".format(new_job.id))
+                           else:
+                               new_workbook = server.workbooks.publish(new_workbook, row['Workbook'] +".twbx", overwrite_true)
+                               print("Workbook published. ID: {0}".format(new_workbook.id))
+                       else:
+                           error = "The default project could not be found."
+                           raise LookupError(error)
 
 
 
