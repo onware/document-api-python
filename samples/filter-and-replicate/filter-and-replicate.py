@@ -5,11 +5,9 @@ import csv              # so we can work with our database list (in a CSV file)
 import argparse
 import getpass
 import logging
-
+import zipfile
 import tableauserverclient as TSC
 from tableauserverclient import ConnectionCredentials, ConnectionItem
-
-
 from tableaudocumentapi import Workbook
 
 ############################################################
@@ -22,90 +20,79 @@ def main():
     parser = argparse.ArgumentParser(description='Publish a workbook to server.')
     parser.add_argument('--server', '-s', required=True, help='server address')
     parser.add_argument('--username', '-u', required=True, help='username to sign into server')
+    parser.add_argument('--sitename','-sn',required=True, help='site name to sign into')
     parser.add_argument('--logging-level', '-l', choices=['debug', 'info', 'error'], default='error',
                         help='desired logging level (set to error by default)')
     parser.add_argument('--as-job', '-a', help='Publishing asynchronously', action='store_true')
-
+    
     args = parser.parse_args()
-
+    
     password = getpass.getpass("Password: ")
-
+    
     # Set logging level based on user input, or error by default
     logging_level = getattr(logging, args.logging_level.upper())
     logging.basicConfig(level=logging_level)
-
+    
     # Step 1: Sign in to server.
-    tableau_auth = TSC.TableauAuth(args.username, password)
+    tableau_auth = TSC.TableauAuth(args.username, password, args.sitename)
     server = TSC.Server(args.server)
-
+    
     overwrite_true = TSC.Server.PublishMode.Overwrite
+    
     with server.auth.sign_in(tableau_auth):
         with open('databases.csv') as csvfile:
             databases = csv.DictReader(csvfile, delimiter=',', quotechar='"')
-            for row in databases:
-	    		
-            # Open the workbook
-                sourceWB = Workbook(row['Workbook'] + row['Format'])
+            for row in databases:   		
+                # Open the workbook
+                    sourceWB = Workbook(row['Workbook'] + row['Format'])
+        
+                # Update the filters
+                    for datasource in reversed(sourceWB.datasources):
+                        for children in datasource._datasourceTree._root._children:
+                            if "column" in children.attrib and "class" in children.attrib:
+                                if children.attrib["column"] == "[Branch]" and children.attrib["class"] == "categorical":
+                                    for subchildren in children._children:
+                                        if "member" in subchildren.attrib:
+                                            subchildren.attrib["member"] = '&quot;' + row['Branch'] + '&quot;'
+                            
+                # Save our newly created workbook with the new file name
+                    sourceWB.save_as(row['Workbook'] + ' - ' + row['Branch'] + row['Format']) 
 
-            # Update the filters
-                for datasource in reversed(sourceWB.datasources):
-                    for children in datasource._datasourceTree._root._children:
-	    	    		if "column" in children.attrib and "class" in children.attrib:
-	    	    			if children.attrib["column"] == "[Branch]" and children.attrib["class"] == "categorical":						
-	    	    				for subchildren in children._children:
-	    	    					if "member" in subchildren.attrib:
-	    	    						subchildren.attrib["member"] = '&quot;' + row['Branch'] + '&quot;'
-                        
-            # Save our newly created workbook with the new file name
-                sourceWB.save_as(row['Workbook'] + ' - ' + row['Branch'] + row['Format'])
+                    z = zipfile.ZipFile(row['Workbook'] + ' - ' + row['Branch'] + row['Format'] +".twbx",mode='w')
+                    z.write(row['Workbook'] + row['Format'])
+                    #z.write("ClayburnServices_HZLogo.jpg","Image\\ClayburnServices_HZLogo.jpg")
+                    #z.write("Thorpe_Logo2015.jpg","Image\\Thorpe_Logo2015.jpg")
+                    z.close()
 
-               
-
-                # Step 2: Get all the projects on server, then look for the
-                # right one.
-                all_projects, pagination_item = server.projects.get()
-                project = next((project for project in all_projects if project.name == row['Project']), None)
+                    all_projects, pagination_item = server.projects.get()
+                    default_project = next((project for project in all_projects if project.name == row['Project']), None)
 
 
-                connection = ConnectionItem()
-                connection.server_address = args.server
-                connection.server_port = "443"
-                connection.connection_credentials = ConnectionCredentials(args.username, password, True)
+                    connection2 = ConnectionItem()
+                    connection2.server_address = "10ay.online.tableau.com"
+                    connection2.server_port = "443"
+                    connection2.connection_credentials = ConnectionCredentials(args.username, password, True)
 
-                all_connections = list()
-                all_connections.append(connection)
+                    all_connections = list()
+                    all_connections.append(connection2)
 
-                # Step 3: If project is found, form a new workbook item and
-                # publish.
-                if project is not None:
-                    new_workbook = sourceWB
-                    if args.as_job:
-                        new_job = server.workbooks.publish(new_workbook, row['Project'], overwrite_true,
-                                                           connections=all_connections, as_job=args.as_job)
-                        print("Workbook published. JOB ID: {0}".format(new_job.id))
+                    if default_project is not None:
+                        new_workbook = TSC.WorkbookItem(default_project.id)
+                        if args.as_job:
+                            new_job = server.workbooks.publish(new_workbook,row['Workbook'] +".twbx", overwrite_true)
+                            print("Workbook published. JOB ID: {0}".format(new_job.id))
+                        else:
+                            new_workbook = server.workbooks.publish(new_workbook, row['Workbook'] +".twbx", overwrite_true)
+                            print("Workbook published. ID: {0}".format(new_workbook.id))
                     else:
-                        new_workbook = server.workbooks.publish(new_workbook, row['Project'], overwrite_true,
-                                                                connections=all_connections, as_job=args.as_job)
-                        print("Workbook published. ID: {0}".format(new_workbook.id))
-                else:
-                    error = "The default project could not be found."
-                    raise LookupError(error)
+                        error = "The default project could not be found."
+                        raise LookupError(error)
+
+
 
 
 if __name__ == '__main__':
     main()
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
