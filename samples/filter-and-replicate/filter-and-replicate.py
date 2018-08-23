@@ -17,7 +17,7 @@ from tableaudocumentapi import Workbook
 #          create new .twb's with their settings
 ############################################################
 
-//https://stackoverflow.com/questions/19932130/iterate-through-folders-then-subfolders-and-print-filenames-with-path-to-text-f
+#https://stackoverflow.com/questions/19932130/iterate-through-folders-then-subfolders-and-print-filenames-with-path-to-text-f
 def list_files(dir):                                                                                                  
     r = []                                                                                                            
     subdirs = [x[0] for x in os.walk(dir)]                                                                            
@@ -86,29 +86,29 @@ def main():
                                    z.write(item,item.replace("Zip",""))
                            z.close()
 
-                       all_projects, pagination_item = server.projects.get()
-                       default_project = next((project for project in all_projects if project.name == row['Project']), None)
-                  
-                  
-                       connection = ConnectionItem()
-                       connection.server_address = "10ay.online.tableau.com"
-                       connection.server_port = "443"
-                       connection.connection_credentials = ConnectionCredentials(args.username, password, True)
-                       
-                       all_connections = list()
-                       all_connections.append(connection)
-                       
-                       if default_project is not None:
-                           new_workbook = TSC.WorkbookItem(default_project.id)
-                           if args.as_job:
-                               new_job = server.workbooks.publish(new_workbook,row['Workbook'] +".twbx", overwrite_true)
-                               print("Workbook published. JOB ID: {0}".format(new_job.id))
-                           else:
-                               new_workbook = server.workbooks.publish(new_workbook, row['Workbook'] +".twbx", overwrite_true)
-                               print("Workbook published. ID: {0}".format(new_workbook.id))
-                       else:
-                           error = "The default project could not be found."
-                           raise LookupError(error)
+                       #all_projects, pagination_item = server.projects.get()
+                       #default_project = next((project for project in all_projects if project.name == row['Project']), None)
+                       #
+                       #
+                       #connection = ConnectionItem()
+                       #connection.server_address = "10ay.online.tableau.com"
+                       #connection.server_port = "443"
+                       #connection.connection_credentials = ConnectionCredentials(args.username, password, True)
+                       #
+                       #all_connections = list()
+                       #all_connections.append(connection)
+                       #
+                       #if default_project is not None:
+                       #    new_workbook = TSC.WorkbookItem(default_project.id)
+                       #    if args.as_job:
+                       #        new_job = server.workbooks.publish(new_workbook,row['Workbook'] +".twbx", overwrite_true)
+                       #        print("Workbook published. JOB ID: {0}".format(new_job.id))
+                       #    else:
+                       #        new_workbook = server.workbooks.publish(new_workbook, row['Workbook'] +".twbx", overwrite_true)
+                       #        print("Workbook published. ID: {0}".format(new_workbook.id))
+                       #else:
+                       #    error = "The default project could not be found."
+                       #    raise LookupError(error)
 
 
 
