@@ -50,65 +50,94 @@ def main():
     # Step 1: Sign in to server.
     tableau_auth = TSC.TableauAuth(args.username, password, args.sitename)
     server = TSC.Server(args.server)
-    
+    count = 1
     overwrite_true = TSC.Server.PublishMode.Overwrite
-    
+
     with server.auth.sign_in(tableau_auth):
         with open('databases.csv') as csvfile:
-            databases = csv.DictReader(csvfile, delimiter=',', quotechar='"')
-            for row in databases:   		
+            total = sum(1 for line in open('databases.csv'))
+            print("Total file count: " + str(total))
+            databases = csv.DictReader(csvfile, delimiter=',', quotechar='"')         
+            for row in databases:
+                count = count +1 
+                print ("working on item: "+ str(count)+" \n")
                 # Open the workbook
-                   
-                   dir_name = "Zip"
-                   originaltableauworkbook = zipfile.ZipFile(row['Workbook'] + ".twbx")                  
-                   originaltableauworkbook.extractall(dir_name)
-                   test = os.listdir(dir_name)
+                source = "Source"
+                zip = "Zip"
+                export = "Export"
 
-                   for item in test:
-                       if item.endswith(".twb"):
-                           sourceWB = Workbook(os.path.join(dir_name, item))
 
-                        # Update the filters
-                           for datasource in reversed(sourceWB.datasources):
-                               for children in datasource._datasourceTree._root._children:
-                                   if "column" in children.attrib and "class" in children.attrib:
-                                       if children.attrib["column"] == "[Branch]" and children.attrib["class"] == "categorical":
-                                           for subchildren in children._children:
-                                               if "member" in subchildren.attrib:
-                                                   subchildren.attrib["member"] = '&quot;' + row['Branch'] + '&quot;'
-                                    
-                        # Save our newly created workbook with the new file name
-                           sourceWB.save_as(row['Workbook'] + ' - ' + row['Branch'] + row['Format']) 
-                           z = zipfile.ZipFile(row['Workbook'] + ' - ' + row['Branch']+ ".twbx",mode='w')
-                           z.write(row['Workbook'] + ' - ' + row['Branch'] + row['Format'])
-                           for item in list_files(dir_name):
-                               if item.endswith(".twb") != True:
-                                   z.write(item,item.replace("Zip",""))
-                           z.close()
+                if(row['Format'] == ".twbx"):
+                    originaltableauworkbook = zipfile.ZipFile(os.path.join(source, row['Workbook'] + ".twbx"))                  
+                    originaltableauworkbook.extractall(zip)
+                    test = os.listdir(zip)
 
-                       #all_projects, pagination_item = server.projects.get()
-                       #default_project = next((project for project in all_projects if project.name == row['Project']), None)
-                       #
-                       #
-                       #connection = ConnectionItem()
-                       #connection.server_address = "10ay.online.tableau.com"
-                       #connection.server_port = "443"
-                       #connection.connection_credentials = ConnectionCredentials(args.username, password, True)
-                       #
-                       #all_connections = list()
-                       #all_connections.append(connection)
-                       #
-                       #if default_project is not None:
-                       #    new_workbook = TSC.WorkbookItem(default_project.id)
-                       #    if args.as_job:
-                       #        new_job = server.workbooks.publish(new_workbook,row['Workbook'] +".twbx", overwrite_true)
-                       #        print("Workbook published. JOB ID: {0}".format(new_job.id))
-                       #    else:
-                       #        new_workbook = server.workbooks.publish(new_workbook, row['Workbook'] +".twbx", overwrite_true)
-                       #        print("Workbook published. ID: {0}".format(new_workbook.id))
-                       #else:
-                       #    error = "The default project could not be found."
-                       #    raise LookupError(error)
+                    for item in test:
+                        if item.endswith(".twb") :
+                            sourceWB = Workbook(os.path.join(zip, item))
+                     
+                            # Update the filters
+                            for datasource in reversed(sourceWB.datasources):
+                                for children in datasource._datasourceTree._root._children:
+                                    if "column" in children.attrib and "class" in children.attrib:
+                                        if children.attrib["column"] == "[Branch]" and children.attrib["class"] == "categorical":
+                                            for subchildren in children._children:
+                                                if "member" in subchildren.attrib:
+                                                    subchildren.attrib["member"] = '&quot;' + row['Branch'] + '&quot;'
+                                     
+                            # Save our newly created workbook with the new file name
+                            outputpath = os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + ".twb")
+                            sourceWB.save_as(outputpath) 
+                            
+                            if(row['Format'] == ".twbx"):
+                                z = zipfile.ZipFile(os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + row['Format']),mode='w')                                  
+                                z.write(os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + ".twb"),item.replace("Export",""))
+                                for item in list_files(zip):                                       
+                                    if item.endswith(".twb") != True:
+                                        z.write(item,item.replace("Zip",""))
+
+                                z.close()
+
+                elif (row['Format'] ==".twb"):
+                    sourceWB = Workbook(os.path.join(source, row['Workbook'] + ".twb"))                        
+                    # Update the filters
+                    for datasource in reversed(sourceWB.datasources):
+                        for children in datasource._datasourceTree._root._children:
+                            if "column" in children.attrib and "class" in children.attrib:
+                                if children.attrib["column"] == "[Branch]" and children.attrib["class"] == "categorical":
+                                    for subchildren in children._children:
+                                        if "member" in subchildren.attrib:
+                                            subchildren.attrib["member"] = '&quot;' + row['Branch'] + '&quot;'
+                             
+                    # Save our newly created workbook with the new file name
+                    outputpath = os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + ".twb")
+                    sourceWB.save_as(outputpath) 
+
+
+                    all_projects, pagination_item = server.projects.get()
+                    default_project = next((project for project in all_projects if project.name == row['Project']), None)
+                    
+                    
+                    connection = ConnectionItem()
+                    connection.server_address = "10ay.online.tableau.com"
+                    connection.server_port = "443"
+                    connection.connection_credentials = ConnectionCredentials(args.username, password, True)
+                    
+                    all_connections = list()
+                    all_connections.append(connection)
+                    
+                    if default_project is not None:
+                        new_workbook = TSC.WorkbookItem(default_project.id)
+                        if args.as_job:
+                            new_job = server.workbooks.publish(new_workbook,os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + row['Format']), overwrite_true)
+                            print("Workbook published. JOB ID: {0}".format(new_job.id))
+                        else:
+                            new_workbook = server.workbooks.publish(new_workbook, os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + row['Format']), overwrite_true)
+                            print("Workbook published. ID: {0}".format(new_workbook.id))
+                    else:
+                        error = "The default project could not be found."
+                        raise LookupError(error)
+    print ("Done!!!!!!!!!!!!!!!!!!")
 
 
 
