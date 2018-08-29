@@ -54,6 +54,8 @@ def main():
     count = 1
     overwrite_true = TSC.Server.PublishMode.Overwrite
 
+    
+
     with server.auth.sign_in(tableau_auth):
         with open('databases.csv') as csvfile:
             total = sum(1 for line in open('databases.csv'))
@@ -119,7 +121,7 @@ def main():
                 default_project = next((project for project in all_projects if project.name == row['Project']), None)              
                 
                 if default_project is not None:
-                    new_workbook = TSC.WorkbookItem(default_project.id)
+                    new_workbook = TSC.WorkbookItem(default_project.id,show_tabs= True)
                     if args.as_job:
                         new_job = server.workbooks.publish(new_workbook,os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + row['Format']), overwrite_true)
                         print("Workbook published. JOB ID: {0}".format(new_job.id))
