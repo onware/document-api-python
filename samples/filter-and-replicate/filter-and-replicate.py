@@ -28,6 +28,7 @@ def list_files(dir):
                 r.append(subdir + "/" + file)                                                                         
     return r   
 
+
 def main():
 
     parser = argparse.ArgumentParser(description='Publish a workbook to server.')
@@ -59,13 +60,13 @@ def main():
             print("Total file count: " + str(total))
             databases = csv.DictReader(csvfile, delimiter=',', quotechar='"')         
             for row in databases:
-                count = count +1 
+               
                 print ("working on item: "+ str(count)+" \n")
                 # Open the workbook
                 source = "Source"
                 zip = "Zip"
                 export = "Export"
-
+                count = count +1 
 
                 if(row['Format'] == ".twbx"):
                     originaltableauworkbook = zipfile.ZipFile(os.path.join(source, row['Workbook'] + ".twbx"))                  
@@ -75,22 +76,22 @@ def main():
                     for item in test:
                         if item.endswith(".twb") :
                             sourceWB = Workbook(os.path.join(zip, item))
-                     
-                            # Update the filters
                             for datasource in reversed(sourceWB.datasources):
-                                for children in datasource._datasourceTree._root._children:
+                                # Update the filters
+                                for children in datasource._datasourceXML._children:
                                     if "column" in children.attrib and "class" in children.attrib:
                                         if children.attrib["column"] == "[Branch]" and children.attrib["class"] == "categorical":
                                             for subchildren in children._children:
                                                 if "member" in subchildren.attrib:
-                                                    subchildren.attrib["member"] = '&quot;' + row['Branch'] + '&quot;'
+                                                    subchildren.attrib["member"] = '"' + row['Branch'] + '"'
+
                                      
                             # Save our newly created workbook with the new file name
                             outputpath = os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + ".twb")
                             sourceWB.save_as(outputpath) 
                             
                             if(row['Format'] == ".twbx"):
-                                z = zipfile.ZipFile(os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + row['Format']),mode='w')                                  
+                                z = zipfile.ZipFile(os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + row['Format']),mode='w',compression=zipfile.ZIP_DEFLATED)                                  
                                 z.write(os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + ".twb"),item.replace("Export",""))
                                 for item in list_files(zip):                                       
                                     if item.endswith(".twb") != True:
@@ -107,44 +108,32 @@ def main():
                                 if children.attrib["column"] == "[Branch]" and children.attrib["class"] == "categorical":
                                     for subchildren in children._children:
                                         if "member" in subchildren.attrib:
-                                            subchildren.attrib["member"] = '&quot;' + row['Branch'] + '&quot;'
+                                           subchildren.attrib["member"] = '"' + row['Branch'] + '"'
                              
-                    # Save our newly created workbook with the new file name
-                    outputpath = os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + ".twb")
-                    sourceWB.save_as(outputpath) 
+                # Save our newly created workbook with the new file name
+                outputpath = os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + ".twb")
+                sourceWB.save_as(outputpath) 
 
 
-                    all_projects, pagination_item = server.projects.get()
-                    default_project = next((project for project in all_projects if project.name == row['Project']), None)
-                    
-                    
-                    connection = ConnectionItem()
-                    connection.server_address = "10ay.online.tableau.com"
-                    connection.server_port = "443"
-                    connection.connection_credentials = ConnectionCredentials(args.username, password, True)
-                    
-                    all_connections = list()
-                    all_connections.append(connection)
-                    
-                    if default_project is not None:
-                        new_workbook = TSC.WorkbookItem(default_project.id)
-                        if args.as_job:
-                            new_job = server.workbooks.publish(new_workbook,os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + row['Format']), overwrite_true)
-                            print("Workbook published. JOB ID: {0}".format(new_job.id))
-                        else:
-                            new_workbook = server.workbooks.publish(new_workbook, os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + row['Format']), overwrite_true)
-                            print("Workbook published. ID: {0}".format(new_workbook.id))
+                all_projects, pagination_item = server.projects.get()
+                default_project = next((project for project in all_projects if project.name == row['Project']), None)              
+                
+                if default_project is not None:
+                    new_workbook = TSC.WorkbookItem(default_project.id)
+                    if args.as_job:
+                        new_job = server.workbooks.publish(new_workbook,os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + row['Format']), overwrite_true)
+                        print("Workbook published. JOB ID: {0}".format(new_job.id))
                     else:
-                        error = "The default project could not be found."
-                        raise LookupError(error)
+                        new_workbook = server.workbooks.publish(new_workbook, os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + row['Format']), overwrite_true)
+                        print("Workbook published. ID: {0}".format(new_workbook.id))
+                else:
+                    error = "The default project could not be found."
+                    raise LookupError(error)
     print ("Done!!!!!!!!!!!!!!!!!!")
-
-
-
-
+    
+    
 if __name__ == '__main__':
     main()
-
 
 
 
