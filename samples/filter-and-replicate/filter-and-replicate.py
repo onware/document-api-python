@@ -14,6 +14,8 @@ from dateutil.parser import parse
 import platform
 import datetime
 import time
+import sys
+import shutil
 
 ############################################################
 # Step 3) Use a database list (in CSV), loop thru and
@@ -37,14 +39,16 @@ def main():
     parser = argparse.ArgumentParser(description='Publish a workbook to server.')
     parser.add_argument('--server', '-s', required=True, help='server address')
     parser.add_argument('--username', '-u', required=True, help='username to sign into server')
-    parser.add_argument('--sitename','-sn',required=True, help='site name to sign into')
+    parser.add_argument('--sitename','-sn', required=True, help='site name to sign into')
+    parser.add_argument('--password', '-p', required=True, help='Publishing Password')
     parser.add_argument('--logging-level', '-l', choices=['debug', 'info', 'error'], default='error',
                         help='desired logging level (set to error by default)')
     parser.add_argument('--as-job', '-a', help='Publishing asynchronously', action='store_true')
+
     
     args = parser.parse_args()
     
-    password = getpass.getpass("Password: ") 
+    password = args.password
 
 
     # Set logging level based on user input, or error by default
@@ -62,7 +66,7 @@ def main():
     zip = "Zip"
     export = "Export"
     columns = ['Workbook', 'Format', 'Project', 'Branch', 'Directory', 'PublishDate','ModifiedDate' ]
-
+    oldworkbookname = ""
     with server.auth.sign_in(tableau_auth):
         with open('databases.csv',mode='r') as csvfile:
             total = sum(1 for line in open('databases.csv'))
@@ -73,6 +77,12 @@ def main():
             writer.writeheader()
             for row in databases:               
                 if any(row):
+                    if(row['Workbook'] != oldworkbookname):
+                        shutil.rmtree('Export', ignore_errors=True, onerror=None)
+                        os.makedirs('Export')
+                        shutil.rmtree('Zip', ignore_errors=True, onerror=None)
+                        os.makedirs('Zip')
+
                     print ("working on item: "+ str(count)+" \n")
                     mtime = parse(time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(os.path.getmtime(os.path.join(source, row['Workbook'] + ".twbx")))))
                     ptime = parse(row['PublishDate'])          
@@ -90,7 +100,7 @@ def main():
                                         # Update the filters
                                         for children in datasource._datasourceXML._children:
                                             if "column" in children.attrib and "class" in children.attrib:
-                                                if children.attrib["column"] == "[Branch]" and children.attrib["class"] == "categorical":
+                                                if "Branch" in children.attrib["column"] and children.attrib["class"] == "categorical":
                                                     for subchildren in children._children:
                                                         if "member" in subchildren.attrib:
                                                             subchildren.attrib["member"] = '"' + row['Branch'] + '"'
@@ -100,14 +110,14 @@ def main():
                                     outputpath = os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + ".twb")
                                     sourceWB.save_as(outputpath) 
                                     
-                                    if(row['Format'] == ".twbx"):
-                                        z = zipfile.ZipFile(os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + row['Format']),mode='w',compression=zipfile.ZIP_DEFLATED)                                  
-                                        z.write(os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + ".twb"),item.replace("Export",""))
-                                        for item in list_files(zip):                                       
-                                            if item.endswith(".twb") != True:
-                                                z.write(item,item.replace("Zip",""))
-
-                                        z.close()
+                                    z = zipfile.ZipFile(os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + row['Format']),mode='w',compression=zipfile.ZIP_DEFLATED) 
+                                    z.write(os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + ".twb"),item.replace("Export",""))                                    
+                                    for item in list_files(zip):                                          
+                                        if item.endswith(".twb") != True:   
+                                            z.write(item,item.replace("Zip",""))   
+                                      
+                                    z.close()
+                                       
 
                         elif (row['Format'] ==".twb"):
                             sourceWB = Workbook(os.path.join(source, row['Workbook'] + ".twb"))                        
@@ -123,7 +133,7 @@ def main():
                         # Save our newly created workbook with the new file name
                         outputpath = os.path.join(export, row['Workbook'] + ' - ' + row['Branch'] + ".twb")
                         sourceWB.save_as(outputpath) 
-
+                        oldworkbookname = row['Workbook']
 
                         all_projects, pagination_item = server.projects.get()
                         default_project = next((project for project in all_projects if project.name == row['Project']), None)              
